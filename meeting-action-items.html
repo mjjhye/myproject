@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>회의록 액션아이템 추출기</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f6fa;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e8eaf0;
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header .icon { font-size: 28px; }
+    header h1 { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+    header p { font-size: 13px; color: #6b7280; margin-top: 2px; }
+
+    .container {
+      max-width: 960px;
+      margin: 32px auto;
+      padding: 0 24px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e8eaf0;
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 14px;
+    }
+
+    /* API Key */
+    .api-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .api-row input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: monospace;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .api-row input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .save-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #6b7280;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .save-label input[type="checkbox"] { cursor: pointer; accent-color: #6366f1; }
+
+    /* Textarea */
+    textarea {
+      width: 100%;
+      height: 220px;
+      padding: 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    textarea:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+
+    .actions-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 14px;
+    }
+    .char-count { font-size: 12px; color: #9ca3af; }
+
+    /* Buttons */
+    .btn {
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+    .btn-primary {
+      background: #6366f1;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-primary:hover:not(:disabled) { background: #4f46e5; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+      font-size: 13px;
+      padding: 8px 16px;
+    }
+    .btn-secondary:hover { background: #e5e7eb; }
+
+    /* Spinner */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error / Info */
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+    .alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+    .alert-info  { background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; }
+
+    /* Results */
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .result-count {
+      font-size: 13px;
+      background: #ede9fe;
+      color: #6366f1;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+    .export-btns { display: flex; gap: 8px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    thead tr { background: #f9fafb; }
+    th {
+      padding: 11px 14px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    td {
+      padding: 13px 14px;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: top;
+      line-height: 1.5;
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #fafafa; }
+
+    .num-cell { color: #9ca3af; font-size: 13px; width: 36px; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-high   { background: #fef2f2; color: #dc2626; }
+    .badge-medium { background: #fffbeb; color: #d97706; }
+    .badge-low    { background: #f0fdf4; color: #16a34a; }
+    .badge-null   { background: #f3f4f6; color: #9ca3af; }
+
+    .null-text { color: #d1d5db; font-style: italic; font-size: 13px; }
+
+    #results-card { display: none; }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #9ca3af;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="icon">📋</span>
+  <div>
+    <h1>회의록 액션아이템 추출기</h1>
+    <p>회의록을 붙여넣으면 액션아이템 · 담당자 · 기한을 자동으로 추출합니다</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- API Key -->
+  <div class="card">
+    <div class="card-title">Anthropic API 키</div>
+    <div class="api-row">
+      <input type="password" id="api-key" placeholder="sk-ant-..." autocomplete="off">
+      <label class="save-label">
+        <input type="checkbox" id="save-key"> 저장
+      </label>
+    </div>
+  </div>
+
+  <!-- Meeting notes input -->
+  <div class="card">
+    <div class="card-title">회의록</div>
+    <textarea id="notes" placeholder="회의록을 여기에 붙여넣으세요.
+
+예시)
+오늘 회의에서 김철수가 다음 주 금요일까지 API 문서를 작성하기로 했습니다.
+이박사는 이번 달 말까지 데이터베이스 마이그레이션을 완료해야 합니다.
+최팀장이 고객사에 제안서를 월요일까지 제출할 예정입니다."></textarea>
+    <div class="actions-row">
+      <span class="char-count" id="char-count">0자</span>
+      <button class="btn btn-primary" id="extract-btn" onclick="extract()">
+        <span class="spinner" id="spinner"></span>
+        <span id="btn-text">⚡ 추출하기</span>
+      </button>
+    </div>
+    <div class="alert alert-error" id="error-msg"></div>
+  </div>
+
+  <!-- Results -->
+  <div class="card" id="results-card">
+    <div class="result-header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="card-title" style="margin:0">추출 결과</div>
+        <span class="result-count" id="result-count">0건</span>
+      </div>
+      <div class="export-btns">
+        <button class="btn btn-secondary" onclick="copyTable()">📋 복사</button>
+        <button class="btn btn-secondary" onclick="exportCSV()">⬇ CSV</button>
+      </div>
+    </div>
+    <div id="table-wrap"></div>
+  </div>
+
+</div>
+
+<script>
+  const KEY_STORAGE = 'mia_api_key';
+
+  // Restore saved API key
+  const saved = localStorage.getItem(KEY_STORAGE);
+  if (saved) {
+    document.getElementById('api-key').value = saved;
+    document.getElementById('save-key').checked = true;
+  }
+
+  // Char count
+  document.getElementById('notes').addEventListener('input', function() {
+    document.getElementById('char-count').textContent = this.value.length + '자';
+  });
+
+  async function extract() {
+    const apiKey = document.getElementById('api-key').value.trim();
+    const notes  = document.getElementById('notes').value.trim();
+    const saveKey = document.getElementById('save-key').checked;
+
+    hideError();
+
+    if (!apiKey) { showError('API 키를 입력해주세요.'); return; }
+    if (!notes)  { showError('회의록 내용을 입력해주세요.'); return; }
+
+    if (saveKey) localStorage.setItem(KEY_STORAGE, apiKey);
+    else localStorage.removeItem(KEY_STORAGE);
+
+    setLoading(true);
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
+          system: `You are an assistant that extracts action items from meeting notes.
+Return ONLY a valid JSON array with no markdown, no explanation, no code fences.
+Each object must have exactly these keys: "action", "assignee", "deadline", "priority".
+- action: the task to be done (string)
+- assignee: the person responsible (string or null if unclear)
+- deadline: the due date or timeframe in the original language (string or null if unclear)
+- priority: one of "high", "medium", "low" based on urgency/importance cues (default "medium" if unclear)
+Example: [{"action":"보고서 작성","assignee":"홍길동","deadline":"다음 주 금요일","priority":"high"}]`,
+          messages: [{ role: 'user', content: `다음 회의록에서 액션아이템을 추출해주세요:\n\n${notes}` }]
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `API 오류 (${res.status})`);
+      }
+
+      const data = await res.json();
+      const text = data.content?.[0]?.text || '';
+
+      let items;
+      try {
+        // Strip accidental markdown fences if present
+        const clean = text.replace(/```[a-z]*\n?/gi, '').trim();
+        items = JSON.parse(clean);
+        if (!Array.isArray(items)) throw new Error('배열이 아님');
+      } catch {
+        showError('응답을 파싱하지 못했습니다. 원본:\n' + text);
+        return;
+      }
+
+      renderTable(items);
+    } catch (e) {
+      showError(e.message || '알 수 없는 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function renderTable(items) {
+    const card = document.getElementById('results-card');
+    const wrap = document.getElementById('table-wrap');
+    document.getElementById('result-count').textContent = items.length + '건';
+
+    if (items.length === 0) {
+      wrap.innerHTML = '<div class="empty-state">추출된 액션아이템이 없습니다.</div>';
+      card.style.display = 'block';
+      return;
+    }
+
+    const rows = items.map((item, i) => {
+      const p = (item.priority || 'medium').toLowerCase();
+      const badgeClass = ['high','medium','low'].includes(p) ? 'badge-' + p : 'badge-null';
+      const badgeLabel = { high: '높음', medium: '보통', low: '낮음' }[p] || p;
+      return `<tr>
+        <td class="num-cell">${i + 1}</td>
+        <td>${esc(item.action)}</td>
+        <td>${item.assignee ? esc(item.assignee) : '<span class="null-text">미정</span>'}</td>
+        <td>${item.deadline ? esc(item.deadline) : '<span class="null-text">미정</span>'}</td>
+        <td><span class="badge ${badgeClass}">${badgeLabel}</span></td>
+      </tr>`;
+    }).join('');
+
+    wrap.innerHTML = `<table>
+      <thead><tr>
+        <th>#</th><th>액션아이템</th><th>담당자</th><th>기한</th><th>우선순위</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+    card.style.display = 'block';
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Store for export
+    window._lastItems = items;
+  }
+
+  function copyTable() {
+    const items = window._lastItems || [];
+    if (!items.length) return;
+    const lines = ['액션아이템\t담당자\t기한\t우선순위',
+      ...items.map(i => [i.action, i.assignee||'미정', i.deadline||'미정', i.priority||'medium'].join('\t'))
+    ];
+    navigator.clipboard.writeText(lines.join('\n'))
+      .then(() => alert('클립보드에 복사되었습니다.'))
+      .catch(() => alert('복사 실패: 브라우저 권한을 확인해주세요.'));
+  }
+
+  function exportCSV() {
+    const items = window._lastItems || [];
+    if (!items.length) return;
+    const rows = [['#','액션아이템','담당자','기한','우선순위'],
+      ...items.map((it, i) => [i+1, it.action, it.assignee||'미정', it.deadline||'미정', it.priority||'medium'])
+    ];
+    const csv = '\uFEFF' + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = '액션아이템.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function setLoading(on) {
+    const btn = document.getElementById('extract-btn');
+    const spinner = document.getElementById('spinner');
+    const txt = document.getElementById('btn-text');
+    btn.disabled = on;
+    spinner.style.display = on ? 'block' : 'none';
+    txt.textContent = on ? '분석 중...' : '⚡ 추출하기';
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+  function hideError() {
+    document.getElementById('error-msg').style.display = 'none';
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>
